@@ -5,6 +5,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from typing import List
 import re, os
+from config import *
 
 
 def clean_subtitle_text(text):
@@ -43,8 +44,20 @@ def spli_text(documents: List[str], chunk_size: int = 1000, chunk_overlap: int =
     split_chunks = text_splitter.split_documents(documents)
     return split_chunks
 
-def create_and_save_embeddings(
-        chunks: List[Document],
+def get_embeddings(        
+        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        device: str = "cpu") -> HuggingFaceEmbeddings:
+    """Initializes and returns the local HuggingFace embedding model."""
+
+    print(f"Loading local embedding model: {model_name}")
+    embeddings = HuggingFaceEmbeddings(
+        model_name=model_name,
+        model_kwargs={'device': device} 
+    )
+    return embeddings
+
+def create_and_save_or_load_embeddings(
+        chunks: List[Document] | None = None,
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
         device: str = "cpu",
         save_path: str = "index/movie_script_faiss_index"
@@ -53,34 +66,43 @@ def create_and_save_embeddings(
     Creates embeddings from document chunks, builds a FAISS index, 
     saves it locally, and returns the in-memory vector store.
     """
-
-    model_name: str = model_name
-    embeddings = HuggingFaceEmbeddings(
-        model_name=model_name,
-        model_kwargs={'device': device}
-    )
-
-    vector_store = FAISS.from_documents(
-        documents=chunks,
-        embedding=embeddings
-    )
-
-    print("✅ Vector store (FAISS index) successfully created in memory.")
-    save_dir = os.path.dirname(save_path)
-    if save_dir and not os.path.exists(save_dir):
-        os.makedirs(save_dir, exist_ok=True)
-    vector_store.save_local(save_path)
-    print(f"Index saved to: {save_path}")
-    return vector_store
     
+    embeddings = get_embeddings(model_name, device)
+    if os.path.exists(FAISS_INDEX_PATH) and os.path.isdir(FAISS_INDEX_PATH):
+        # 1. LOAD existing index
+        print(f"Loading existing FAISS index from: {FAISS_INDEX_PATH}")
+        # allow_dangerous_deserialization=True is required by LangChain for security when loading
+        vector_store = FAISS.load_local(
+            FAISS_INDEX_PATH, 
+            embeddings, 
+            allow_dangerous_deserialization=True
+        )
+        print("✅ Vector store loaded successfully.")
+    
+    elif chunks is not None:
+        # 2. CREATE new index
+        print("Index not found. Creating new FAISS index from document chunks...")
+        vector_store = FAISS.from_documents(
+            documents=chunks,
+            embedding=embeddings
+        )
+        vector_store.save_local(FAISS_INDEX_PATH)
+        print(f"✅ Vector store created and saved to: {FAISS_INDEX_PATH}")
+    
+    else:
+        raise FileNotFoundError(
+            "Vector store path not found, and no document chunks were provided to create it."
+        )
+        
+    return vector_store
 
 def main():
-    loader = SRTLoader("subtitiles/raw/Terminator.3.srt")
+    loader = SRTLoader(SRT_PATHS[0])
     docs = loader.load()
     for doc in docs:
         doc.page_content = clean_subtitle_text(doc.page_content)
-    split_chunks = spli_text(docs)
-    x = create_and_save_embeddings(split_chunks)
+    split_chunks = spli_text(docs, CHUNK_SIZE, CHUNK_OVERLAP)
+    x = create_and_save_or_load_embeddings(split_chunks, HF_EMBEDDING_MODEL, DEVICE, FAISS_INDEX_PATH)
     
 
 if __name__ == "__main__":
