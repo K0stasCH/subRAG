@@ -1,29 +1,12 @@
-# import streamlit as st
-
-
-# st.title("🦜🔗 Quickstart App")
-
-# openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
-
-
-# def generate_response(input_text):
-#     st.info("this is a test")
-
-
-# with st.form("my_form"):
-#     text = st.text_area(
-#         "Enter text:",
-#         "What are the three key pieces of advice for learning how to code?",
-#     )
-#     submitted = st.form_submit_button("Submit")
-#     # if not openai_api_key.startswith("sk-"):
-#     #     st.warning("Please enter your OpenAI API key!", icon="⚠")
-#     if submitted :
-#         generate_response(text)
-
 import streamlit as st
+import requests
 from streamlit_pills import pills
+# from ..api.dataSchemas import Query
 
+
+API_BASE_URL = "http://127.0.0.1:8000" 
+ENDPOINT = "/api/query"
+API_URL = f"{API_BASE_URL}{ENDPOINT}"
 
 st.set_page_config(
     page_title="Test1",
@@ -59,6 +42,17 @@ def add_to_message_history(role: str, content: str) -> None:
     message = {"role": role, "content": str(content)}
     st.session_state.messages.append(message)  # Add response to message history
 
+def get_data_from_backend(question:str):
+    """Calls the backend API and returns the message."""
+    try:        
+        payload = {"query": question}
+        response = requests.post(API_URL, json=payload)
+        response.raise_for_status()  # Raises an HTTPError for bad responses (4xx or 5xx)
+        data = response.json()
+        return data
+    except requests.exceptions.RequestException as e:
+        st.error(f"Could not connect to the backend API: {e}")
+        return "Error: Could not retrieve data from the backend."
 
 for message in st.session_state.messages:  # Display the prior chat messages
     with st.chat_message(message["role"]):
@@ -82,7 +76,7 @@ if prompt := st.chat_input(
         if st.session_state.messages[-1]["role"] != "assistant":
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
-                    response = "test 10"
+                    response = get_data_from_backend(prompt)["answer"]
                     st.write(str(response))
                     add_to_message_history("assistant", str(response))
 

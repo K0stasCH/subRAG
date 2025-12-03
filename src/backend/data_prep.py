@@ -5,7 +5,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from typing import List
 import re, os
-from config import *
+from .config import *
 
 
 def clean_subtitle_text(text):
