@@ -10,5 +10,4 @@ COPY src/backend/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # Copy only the necessary backend source code and config files
-# We copy the whole src/ directory because your FastAPI might import config, schemas, etc.
 COPY src/backend /app/src/backend

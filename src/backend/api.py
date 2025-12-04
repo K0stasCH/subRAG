@@ -1,52 +1,64 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from .dataSchemas import Query 
 from .SubRag import SubRag
-from .dataSchemas import Query
 from contextlib import asynccontextmanager
+import os
+import sys
 
-
-# --- RAG Initialization ---
-global rag_instance
-rag_instance = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initializes and cleans up the RAG instance for the application's lifespan."""
+    """
+    Initializes the RAG instance and stores it in app.state for dependency access.
+    Handles cleanup when the application shuts down.
+    """
+    # 1. Initialization
     try:
         print("Attempting to initialize RAG instance...")
-        # The SubRag constructor will handle FAISS loading and chain setup
-        # Note: If SubRag() is a synchronous call, you don't need 'await'
-        rag_instance = SubRag() 
-        print("✅ RAG Instance initialized successfully.")
+        # Check for required environment variables early
+        if not os.getenv("GEMINI_API_KEY"):
+            # Use sys.exit or similar for a hard failure if a critical resource is missing
+            print("❌ Error not API key found")
+            sys.exit(1)
+            
+        # The SubRag constructor handles FAISS loading and chain setup
+        # Store the initialized instance directly on the app's state object
+        app.state.rag_instance = SubRag() 
+        print("✅ RAG Instance initialized successfully and stored in app.state.")
     except Exception as e:
         print(f"❌ Critical Error initializing the RAG instance.\nError: {e}")
-        # Server will start, but endpoints must check if rag_instance is None
+        # Set a clear state failure flag
+        app.state.rag_instance = None
     
-    # This 'yield' statement is key! It tells the server to start serving requests.
+    # 2. Yield (Start serving requests)
     yield
 
+    # 3. Cleanup
     print("Application shutting down...")
-    # Add any necessary cleanup for rag_instance here, 
-    # e.g., closing file handles or database connections if SubRag had any.
-    if rag_instance:
-        # Example cleanup:
-        # await rag_instance.cleanup() 
-        pass
+    # Access the instance from app.state for cleanup
+    if hasattr(app.state, 'rag_instance') and app.state.rag_instance:
+        # Add any necessary cleanup logic here if SubRag requires it (e.g., closing connections)
+        # if hasattr(app.state.rag_instance, 'cleanup'):
+        #     await app.state.rag_instance.cleanup()
+        app.state.rag_instance = None
+        print("RAG Instance cleaned up.")
+
 
 # Load environment variables (including GEMINI_API_KEY)
 load_dotenv()
 
 # --- App Initialization ---
+# Pass the lifespan function to the FastAPI constructor
 app = FastAPI(lifespan=lifespan)
 
 
 # --- CORS Configuration ---
-# Allows the frontend (running on a different port/domain) to connect to the backend.
-# IMPORTANT: Adjust 'allow_origins' in a production environment for security.
 app.add_middleware(
     CORSMiddleware,
-    # For local development, allow all origins
+    # IMPORTANT: Use a list of specific origins in production for security!
+    # e.g., allow_origins=["https://yourfrontend.com", "http://localhost:3000"]
     allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
@@ -54,55 +66,48 @@ app.add_middleware(
 )
 
 
-# @app.on_event("startup")
-# def startup_event():
-#     """Initializes the RAG instance when the FastAPI server starts."""
-#     global rag_instance
-#     try:
-#         print("Attempting to initialize RAG instance...")
-#         # The SubRag constructor will handle FAISS loading and chain setup
-#         rag_instance = SubRag()
-#         print("✅ RAG Instance initialized successfully.")
-#     except Exception as e:
-#         print(f"❌ Critical Error initializing the RAG instance.\nError: {e}")
-#         # Optionally raise HTTPException here to prevent server startup, but for now, we'll log and continue.
-#         # If rag_instance is None, the RAG endpoint will handle the error.
-
-
-
 # --- API Endpoints ---
 @app.get("/")
 def read_root():
     """Default route to check API health."""
-    return {"message": "RAG API is running!", "status": "online"}
+    # Check the state of the RAG instance for a more accurate health check
+    status = "online" if hasattr(app.state, 'rag_instance') and app.state.rag_instance else "degraded (RAG not initialized)"
+    return {"message": "RAG API is running!", "status": status}
+
 
 @app.post("/api/query")
-async def process_query(data: dict):
+async def process_query(query_data: Query):
     """
     Endpoint to receive a user query and process it through the RAG chain.
-    The frontend sends JSON data: {"query": "The user's question..."}
     """
+    # 1. Access RAG Instance via app.state
+    rag_instance = app.state.rag_instance if hasattr(app.state, 'rag_instance') else None
+    
     if rag_instance is None:
-        raise HTTPException(status_code=503, detail="RAG service is not initialized. Check server logs for errors.")
+        raise HTTPException(
+            status_code=503, 
+            detail="❌ RAG service is not initialized. Check server logs for initialization errors."
+        )
         
-    user_query = data["query"]
-    if not user_query:
-        raise HTTPException(status_code=400, detail="Missing 'query' parameter in request body.")
-
+    user_query = query_data.query # Access the query string from the Pydantic model
+    
     try:
         # Get the response from the RAG system
+        # Ensure rag_response is either synchronous or properly awaited if it's async
+        # We assume it is synchronous based on your original code: rag_instance.rag_response(user_query)
         result = rag_instance.rag_response(user_query)
 
         # Structure the response for the frontend
         response_data = {
             "query": result.get("query"),
             "answer": result.get("result"),
+            # Map source documents to a cleaner structure
             "sources": [
                 {
                     "content": doc.page_content,
-                    # Assuming metadata has a 'source' field (e.g., filename)
-                    "source_id": doc.metadata.get('source', 'N/A'), 
-                    "metadata": doc.metadata # Include all metadata if needed
+                    # Fallback to 'N/A' if 'source' or another field is missing
+                    "source_id": doc.metadata.get('source', doc.metadata.get('filename', 'N/A')), 
+                    "metadata": doc.metadata
                 }
                 for doc in result.get("source_documents", [])
             ]
@@ -112,5 +117,12 @@ async def process_query(data: dict):
 
     except Exception as e:
         # Catch any remaining runtime errors during RAG processing
-        print(f"Error processing RAG query: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error during RAG processing: {e}")
+        print(f"❌ Error processing RAG query: {e}")
+        # Log the full traceback for better debugging
+        import traceback
+        traceback.print_exc()
+        
+        raise HTTPException(
+            status_code=500, 
+            detail=f"❌ Internal server error during RAG processing. Details: {type(e).__name__}"
+        )

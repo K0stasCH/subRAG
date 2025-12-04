@@ -5,9 +5,12 @@ from streamlit_pills import pills
 
 
 # API_BASE_URL = "http://127.0.0.1:8000" 
-API_BASE_URL = "http://localhost:8000"
+# API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = "http://backend:8000"
+# API_BASE_URL = ""
 ENDPOINT = "/api/query"
 API_URL = f"{API_BASE_URL}{ENDPOINT}"
+
 
 def add_to_message_history(role: str, content: str) -> None:
     message = {"role": role, "content": str(content)}
@@ -23,7 +26,7 @@ def get_data_from_backend(question:str):
         return data
     except requests.exceptions.RequestException as e:
         st.error(f"Could not connect to the backend API: {e}")
-        return "Error: Could not retrieve data from the backend."
+        return {"answer": "❌ Error: Could not retrieve data from the backend."}
 
 st.set_page_config(
     page_title="SubRag - A RAG system given subtiltes of a movie",
@@ -33,14 +36,15 @@ st.set_page_config(
     menu_items=None,
 )
 
-st.title("SubRag - A RAG system given subtiltes of a movie")
+st.title("SubRag")
+st.header("A RAG system that replies based on the subtiltes of a movie")
 st.info(
     "Test4",
     icon="ℹ️",
 )
 
 # add pills
-selected = pills(
+selected_pill= pills(
     "Test5",
     [
         "Who is the main character?",
@@ -85,20 +89,6 @@ if prompt := st.chat_input(
         else:
             pass
 
-        # # check agent_ids again
-        # # if it doesn't match, add to directory and refresh
-        # agent_ids = current_state.agent_registry.get_agent_ids()
-        # # check diff between agent_ids and cur agent ids
-        # diff_ids = list(set(agent_ids) - set(st.session_state.cur_agent_ids))
-        # if len(diff_ids) > 0:
-        #     # # clear streamlit cache, to allow you to generate a new agent
-        #     # st.cache_resource.clear()
-        #     st.session_state.has_rerun = True
-        #     st.rerun()
-
 else:
     # TODO: set has_rerun to False
     st.session_state.has_rerun = False
-
-if __name__ == "__main__":
-    pass

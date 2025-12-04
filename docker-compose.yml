@@ -8,9 +8,11 @@ services:
       dockerfile: Dockerfile.backend
     env_file:
       - .env # Docker Compose will look for a file named .env in the root directory
-    # ---------------------
+    restart: always
     ports:
       - "8000:8000"
+    networks:
+      - my_network
     environment:
       # You can still set general, non-secret variables here
       - ENVIRONMENT=development
@@ -20,8 +22,8 @@ services:
       # 2. Data Volumes
       - ./subtitles:/app/subtitles
       - ./index:/app/index
-    # command: uvicorn src.backend.api:app --host 0.0.0.0 --port 8000 --reload
-    command: uvicorn src.backend.api:app --reload 
+    command: uvicorn src.backend.api:app --host 0.0.0.0 --port 8000 --reload
+    # command: uvicorn src.backend.api:app --reload 
 
 
       
@@ -34,15 +36,22 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+    restart: always
     ports:
       - "8501:8501"
-    environment:
+    # environment:
       # Critical for internal communication
-      - BACKEND_URL=http://backend:8000
+      # - BACKEND_URL=http://backend:8000
+    networks:
+      - my_network
     depends_on:
       - backend
     volumes:
       # LIVE CODE MOUNT: Syncs your local code folder to the container
       - ./src:/app/src 
-    # command: streamlit run src/frontend/app.py --server.port 8501 --server.enableCORS true --server.enableXsrfProtection false
-    command: streamlit run src/frontend/app.py
+    command: streamlit run src/frontend/app.py --server.port 8501 --server.enableCORS true --server.enableXsrfProtection false
+    # command: streamlit run src/frontend/app.py
+
+networks:
+  my_network:
+    driver: bridge
