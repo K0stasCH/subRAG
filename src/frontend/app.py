@@ -4,39 +4,10 @@ from streamlit_pills import pills
 # from ..api.dataSchemas import Query
 
 
-API_BASE_URL = "http://127.0.0.1:8000" 
+# API_BASE_URL = "http://127.0.0.1:8000" 
+API_BASE_URL = "http://localhost:8000"
 ENDPOINT = "/api/query"
 API_URL = f"{API_BASE_URL}{ENDPOINT}"
-
-st.set_page_config(
-    page_title="Test1",
-    page_icon="Test2",
-    layout="centered",
-    initial_sidebar_state="auto",
-    menu_items=None,
-)
-
-st.title("Test3")
-st.info(
-    "Test4",
-    icon="ℹ️",
-)
-
-# add pills
-selected = pills(
-    "Test5",
-    [
-        "Test6",
-        "Test7",
-    ],
-    clearable=True,
-    index=None,
-)
-
-if "messages" not in st.session_state.keys():  # Initialize the chat messages history
-    st.session_state.messages = [
-        {"role": "assistant", "content": "Test8"}
-    ]
 
 def add_to_message_history(role: str, content: str) -> None:
     message = {"role": role, "content": str(content)}
@@ -53,6 +24,37 @@ def get_data_from_backend(question:str):
     except requests.exceptions.RequestException as e:
         st.error(f"Could not connect to the backend API: {e}")
         return "Error: Could not retrieve data from the backend."
+
+st.set_page_config(
+    page_title="SubRag - A RAG system given subtiltes of a movie",
+    page_icon="📜",
+    layout="centered",
+    initial_sidebar_state="auto",
+    menu_items=None,
+)
+
+st.title("SubRag - A RAG system given subtiltes of a movie")
+st.info(
+    "Test4",
+    icon="ℹ️",
+)
+
+# add pills
+selected = pills(
+    "Test5",
+    [
+        "Who is the main character?",
+        "Make a summary of the plot.",
+    ],
+    clearable=True,
+    index=None,
+)
+
+if "messages" not in st.session_state.keys():  # Initialize the chat messages history
+    st.session_state.messages = [
+        {"role": "assistant", "content": "Test8"}
+    ]
+
 
 for message in st.session_state.messages:  # Display the prior chat messages
     with st.chat_message(message["role"]):
@@ -97,3 +99,6 @@ if prompt := st.chat_input(
 else:
     # TODO: set has_rerun to False
     st.session_state.has_rerun = False
+
+if __name__ == "__main__":
+    pass

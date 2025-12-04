@@ -1,16 +1,45 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from ..backend.SubRag import SubRag
+from .SubRag import SubRag
 from .dataSchemas import Query
+from contextlib import asynccontextmanager
 
 
+# --- RAG Initialization ---
+global rag_instance
+rag_instance = None
 
-# --- App Initialization ---
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initializes and cleans up the RAG instance for the application's lifespan."""
+    try:
+        print("Attempting to initialize RAG instance...")
+        # The SubRag constructor will handle FAISS loading and chain setup
+        # Note: If SubRag() is a synchronous call, you don't need 'await'
+        rag_instance = SubRag() 
+        print("✅ RAG Instance initialized successfully.")
+    except Exception as e:
+        print(f"❌ Critical Error initializing the RAG instance.\nError: {e}")
+        # Server will start, but endpoints must check if rag_instance is None
+    
+    # This 'yield' statement is key! It tells the server to start serving requests.
+    yield
+
+    print("Application shutting down...")
+    # Add any necessary cleanup for rag_instance here, 
+    # e.g., closing file handles or database connections if SubRag had any.
+    if rag_instance:
+        # Example cleanup:
+        # await rag_instance.cleanup() 
+        pass
 
 # Load environment variables (including GEMINI_API_KEY)
 load_dotenv()
+
+# --- App Initialization ---
+app = FastAPI(lifespan=lifespan)
+
 
 # --- CORS Configuration ---
 # Allows the frontend (running on a different port/domain) to connect to the backend.
@@ -24,23 +53,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- RAG Initialization ---
-rag_instance = None
 
-@app.on_event("startup")
-def startup_event():
-    """Initializes the RAG instance when the FastAPI server starts."""
-    global rag_instance
-    try:
-        print("Attempting to initialize RAG instance...")
-        # The SubRag constructor will handle FAISS loading and chain setup
-        rag_instance = SubRag()
-        print("✅ RAG Instance initialized successfully.")
-    except Exception as e:
-        print(f"❌ Critical Error initializing the RAG instance.\nError: {e}")
-        # Optionally raise HTTPException here to prevent server startup, but for now, we'll log and continue.
-        # If rag_instance is None, the RAG endpoint will handle the error.
-        
+# @app.on_event("startup")
+# def startup_event():
+#     """Initializes the RAG instance when the FastAPI server starts."""
+#     global rag_instance
+#     try:
+#         print("Attempting to initialize RAG instance...")
+#         # The SubRag constructor will handle FAISS loading and chain setup
+#         rag_instance = SubRag()
+#         print("✅ RAG Instance initialized successfully.")
+#     except Exception as e:
+#         print(f"❌ Critical Error initializing the RAG instance.\nError: {e}")
+#         # Optionally raise HTTPException here to prevent server startup, but for now, we'll log and continue.
+#         # If rag_instance is None, the RAG endpoint will handle the error.
+
+
 
 # --- API Endpoints ---
 @app.get("/")

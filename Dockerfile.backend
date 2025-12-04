@@ -1,0 +1,14 @@
+# Use a Python 3.10 slim image as the base
+FROM python:3.12-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED 1
+WORKDIR /app
+
+# Copy and install only the backend requirements
+COPY src/backend/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Copy only the necessary backend source code and config files
+# We copy the whole src/ directory because your FastAPI might import config, schemas, etc.
+COPY src/backend /app/src/backend

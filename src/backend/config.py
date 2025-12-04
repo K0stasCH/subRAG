@@ -15,7 +15,6 @@ CHUNK_OVERLAP = 200 # Overlap between adjacent chunks
 HF_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
  
 # --- LLM/RAG PARAMETERS ---
-# Model pulled from Ollama (e.g., 'mistral', 'llama3')
 GEMINI_MODEL_NAME = "gemini-2.5-flash"
 SEARCH_KWARGS = {"k": 3} # Number of chunks to retrieve for each query
 TEMPERATURE = 0.0   # LLM creativity (0.0 is deterministic/factual)
