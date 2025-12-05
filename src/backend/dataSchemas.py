@@ -10,3 +10,9 @@ class Query(BaseModel):
     """
 
     query: str
+
+
+class Health_Status(BaseModel):
+    message: str
+    status: str
+

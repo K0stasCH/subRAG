@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from .dataSchemas import Query 
+from .dataSchemas import Query, Health_Status
 from .SubRag import SubRag
 from contextlib import asynccontextmanager
 import os
@@ -59,7 +59,7 @@ app.add_middleware(
     CORSMiddleware,
     # IMPORTANT: Use a list of specific origins in production for security!
     # e.g., allow_origins=["https://yourfrontend.com", "http://localhost:3000"]
-    allow_origins=["*"], 
+    allow_origins=["http://localhost:8501", "http://127.0.0.1:8501"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -67,13 +67,12 @@ app.add_middleware(
 
 
 # --- API Endpoints ---
-@app.get("/")
-def read_root():
+@app.get("/api/status")
+async def get_health_status():
     """Default route to check API health."""
     # Check the state of the RAG instance for a more accurate health check
     status = "online" if hasattr(app.state, 'rag_instance') and app.state.rag_instance else "degraded (RAG not initialized)"
-    return {"message": "RAG API is running!", "status": status}
-
+    return Health_Status(message="RAG API is running!", status=status)
 
 @app.post("/api/query")
 async def process_query(query_data: Query):
