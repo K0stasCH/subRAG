@@ -14,12 +14,9 @@ services:
     networks:
       - my_network
     environment:
-      # You can still set general, non-secret variables here
       - ENVIRONMENT=development
     volumes:
-      # 1. LIVE CODE MOUNT: Syncs your local code folder to the container
       - ./src:/app/src 
-      # 2. Data Volumes
       - ./subtitles:/app/subtitles
       - ./index:/app/index
     command: uvicorn src.backend.api:app --host 0.0.0.0 --port 8000 --reload
@@ -31,17 +28,14 @@ services:
   # 2. STREAMLIT FRONTEND SERVICE
   # --------------------------------
   frontend:
-    # If your frontend also needs the same .env secrets, you can add env_file here too.
-    # Otherwise, it's best to keep secrets only on the service that needs them (the backend).
     build:
       context: .
       dockerfile: Dockerfile.frontend
     restart: always
     ports:
       - "8501:8501"
-    # environment:
-      # Critical for internal communication
-      # - BACKEND_URL=http://backend:8000
+    environment:
+      - BACKEND_URL=http://backend:8000
     networks:
       - my_network
     depends_on:
