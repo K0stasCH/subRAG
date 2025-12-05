@@ -19,8 +19,6 @@ st.title("SubRag")
 st.header("A RAG system that replies based on the subtiltes of a movie")
 
 status_placeholder = st.empty()
-# t = threading.Thread(target=update_UI_server_status, args=(status_placeholder,), daemon=True)
-# t.start()
 update_UI_server_status(status_placeholder)
 
 if "messages" not in st.session_state:  # Initialize the chat messages history
