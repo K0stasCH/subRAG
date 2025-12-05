@@ -21,7 +21,7 @@ status_placeholder = update_UI_server_status()
 
 if "messages" not in st.session_state:  # Initialize the chat messages history
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hey,you can ask me anything!"}
+        {"role": "assistant", "content": "Hey, you can ask me anything!"}
     ]
 
 
