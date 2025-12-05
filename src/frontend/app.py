@@ -1,5 +1,7 @@
 import streamlit as st
-from utils import add_to_message_history, answer_question, check_server_status, update_UI_server_status
+from utils import add_to_message_history, answer_question, update_UI_server_status
+import threading
+
 
 st.set_page_config(
     page_title="SubRag - A subtiltes RAG system",
@@ -16,19 +18,19 @@ st.set_page_config(
 st.title("SubRag")
 st.header("A RAG system that replies based on the subtiltes of a movie")
 
-status_placeholder = update_UI_server_status()
-
+status_placeholder = st.empty()
+# t = threading.Thread(target=update_UI_server_status, args=(status_placeholder,), daemon=True)
+# t.start()
+update_UI_server_status(status_placeholder)
 
 if "messages" not in st.session_state:  # Initialize the chat messages history
     st.session_state.messages = [
         {"role": "assistant", "content": "Hey, you can ask me anything!"}
     ]
 
-
 for message in st.session_state.messages:  # Display the prior chat messages
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-
 
 if prompt:= st.chat_input("Ask your question here..."):
     add_to_message_history("user", prompt)

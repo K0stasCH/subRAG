@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 from config import API_BASE_URL
+import time
 
 def add_to_message_history(role: str, content: str) -> None:
     """Adds a message to the Streamlit session state chat history."""
@@ -46,9 +47,13 @@ def check_server_status() -> tuple[bool, str]:
     except Exception as e:
         return False, f"An unexpected error occurred: {e}"
     
-def update_UI_server_status():
-  try:
-    is_up, text = check_server_status()
-    return st.success(text, icon="✅") if is_up else st.error(text, icon="❌")
-  except requests.exceptions.RequestException:
-    return st.warning("Backend server may be offline or unreachable.", icon="⚠️")
+def update_UI_server_status(placeholder):
+#   while True:
+    try:
+        is_up, text = check_server_status()
+        placeholder.success(text, icon="✅") if is_up else st.error(text, icon="❌")
+    except requests.exceptions.RequestException:
+        placeholder.warning("Backend server may be offline or unreachable.", icon="⚠️")
+    finally:
+        # time.sleep(5)
+        pass
