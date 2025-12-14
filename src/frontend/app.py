@@ -37,7 +37,7 @@ if prompt:= st.chat_input("Ask your question here..."):
 
     if st.session_state.messages[-1]["role"] == "user":
         with st.chat_message("assistant"):
-            with st.spinner("Searching subtitles..."):
+            with st.spinner("Thinking..."):
                 response_data = answer_question(prompt)
                 answer = response_data.get("answer", "❌ Error: No answer key found in API response.")
                 st.markdown(str(answer))

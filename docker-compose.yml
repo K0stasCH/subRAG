@@ -22,7 +22,6 @@ services:
     command: uvicorn src.backend.api:app --host 0.0.0.0 --port 8000 --reload
     # command: uvicorn src.backend.api:app --reload 
 
-
       
   # --------------------------------
   # 2. STREAMLIT FRONTEND SERVICE
@@ -45,6 +44,21 @@ services:
       - ./src:/app/src 
     command: streamlit run src/frontend/app.py --server.port 8501 --server.enableCORS true --server.enableXsrfProtection false
     # command: streamlit run src/frontend/app.py
+
+  db:
+    image: ankane/pgvector:latest
+    container_name: postgres_pgvector
+    restart: always
+    env_file: .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - my_network
+
+volumes:
+  postgres_data:
 
 networks:
   my_network:
