@@ -7,14 +7,15 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     env_file:
-      - .env # Docker Compose will look for a file named .env in the root directory
+      - .env
     restart: always
     ports:
       - "8000:8000"
     networks:
       - my_network
     environment:
-      - ENVIRONMENT=development
+      # - ENVIRONMENT=development
+      - db_host=db
     volumes:
       - ./src:/app/src 
       - ./subtitles:/app/subtitles
@@ -47,18 +48,35 @@ services:
 
   db:
     image: ankane/pgvector:latest
-    container_name: postgres_pgvector
+    container_name: rag_db
     restart: always
-    env_file: .env
+    env_file:
+      - .env
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - rag_data:/var/lib/postgresql/data
     networks:
       - my_network
+    depends_on:
+      - backend
+
+  pgadmin:
+      image: dpage/pgadmin4
+      container_name: pgadmin-ui
+      environment:
+        PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+        PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      networks:
+        - my_network
+      ports:
+        - "5050:80"
+      depends_on:
+        - db
 
 volumes:
-  postgres_data:
+  rag_data:
+        driver: local
 
 networks:
   my_network:

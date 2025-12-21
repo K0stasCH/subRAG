@@ -1,23 +1,32 @@
 # Components for Retrieval (R)
-from langchain_community.vectorstores import FAISS
+# from langchain_community.vectorstores import PGVector
 # Components for Generation (G)
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_classic.chains import RetrievalQA
 
-from .config import *
-from .data_prep import create_and_save_or_load_embeddings
+from .data_prep import get_embeddings
 
+from .config import *
+import psycopg2
 from dotenv import load_dotenv
 import os
+from .dataSchemas import Query
+from .data_prep import main
 
 class SubRag():
     def __init__(self):
+        print(",.................")
+        main()
+        print(",.................")
         load_dotenv()
         if not os.environ.get("GEMINI_API_KEY"):
             raise Exception("❌ Error not API key found")
         
-        self.vector_store = create_and_save_or_load_embeddings()
+        self.embeddings = get_embeddings()
+        self.db_connection = self._setup_db_connnection()
         self.qa_chain = self.load_rag_chain()
+        self.number_of_retrieved_chunks = SEARCH_KWARGS['k']
+
 
     def _initialize_llm(self):
         print(f"Initializing Gemini LLM with model: {GEMINI_MODEL_NAME}")
@@ -26,6 +35,56 @@ class SubRag():
             temperature=TEMPERATURE
         )
         return llm
+    
+    def _setup_db_connnection(self):
+        """
+        Connects to PostgreSQL using pgvector.
+        This does NOT load vectors into memory. It creates a connection object.
+        """
+
+        COLLECTION_NAME = POSTGRES_COLLECTION_NAME
+        
+        try:
+            print(f"Connecting to PGVector database: {COLLECTION_NAME}...")
+            
+            # This object acts as the interface to the DB. 
+            # It runs SQL queries for retrieval.
+            conn = psycopg2.connect(
+                dbname=os.environ.get("POSTGRES_DB"),
+                user=os.environ.get("POSTGRES_USER"),
+                password=os.environ.get("POSTGRES_PASSWORD"),
+                host=os.environ.get("db_host"),  #is published throught docker compose
+                port=os.environ.get("POSTGRES_PORT"),
+            )
+            print("✅ Database connection established.")
+            return conn
+        except Exception as e:
+            raise Exception(f"❌ Failed to connect to PGVector: {e}")
+
+    def _retrieve_relevant_chunks(self, query: Query):
+        query_embedding = self.embeddings.embed_query(query)
+
+        conn = self._setup_db_connnection()
+        cur = conn.cursor()
+
+        # cur.execute(
+        #     """
+        #     SELECT chunk_text, metadata, embedding <-> %s::vector as distance
+        #     FROM document_chunks
+        #     ORDER BY distance
+        #     LIMIT %s
+        # """,
+        #     (query_embedding, k),
+        # )
+
+        # results = [
+        #     {"text": row[0], "metadata": row[1], "distance": row[2]}
+        #     for row in cur.fetchall()
+        # ]
+        results = None
+        cur.close()
+        conn.close()
+        return results
 
     def load_rag_chain(self) -> RetrievalQA:
         """
