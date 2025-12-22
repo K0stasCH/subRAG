@@ -98,18 +98,8 @@ async def process_query(query_data: Query):
 
         # Structure the response for the frontend
         response_data = {
-            "query": result.get("query"),
-            "answer": result.get("result"),
-            # Map source documents to a cleaner structure
-            "sources": [
-                {
-                    "content": doc.page_content,
-                    # Fallback to 'N/A' if 'source' or another field is missing
-                    "source_id": doc.metadata.get('source', doc.metadata.get('filename', 'N/A')), 
-                    "metadata": doc.metadata
-                }
-                for doc in result.get("source_documents", [])
-            ]
+            "query": result.query,
+            "answer": result.answer,
         }
         
         return response_data

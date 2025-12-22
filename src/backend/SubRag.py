@@ -12,7 +12,7 @@ from langchain_core.documents import Document
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 
 from .config import *
-from .dataSchemas import Query
+from .dataSchemas import Query, Response
 from .data_prep import initiate_data_prep, get_embeddings
 from .setup_db import get_db_string, setup_db
 
@@ -112,17 +112,17 @@ class SubRag():
         )
         print("✅ LCEL RAG Pipeline initialized.")
         return rag_pipeline
-
-    def rag_response(self, query: str):
-        result = None # Initialize result
+    
+    def rag_response(self, query: str) -> Response:
+        """
+        Executes the RAG pipeline and returns a structured Response.
+        """
         try:
-            result = self.rag_pipeline.invoke(query)
-            result={"query":query, "result":result}
+            answer = self.rag_pipeline.invoke(query)
         except Exception as e:
-            print(f"\n❌ ERROR during RAG execution: {e}\n")
-            # Return an error object or dictionary instead of an undefined result
-            return {"query": query, "result": "An error occurred during generation."}
-        return result
+            answer = f"\n❌ ERROR during RAG execution: {e}\n"
+        finally:
+            return Response(query=query, answer=answer)
     
 class PostgresRetriever(BaseRetriever):
     rag_instance: any 

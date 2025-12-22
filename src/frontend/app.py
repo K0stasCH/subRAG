@@ -17,8 +17,12 @@ st.set_page_config(
 st.title("🎬 SubRag 🎬")
 st.header("A RAG system that replies based on the subtiltes of a movie")
 
-status_placeholder = st.empty()
-update_UI_server_status(status_placeholder)
+@st.fragment(run_every=10)
+def sync_status():
+    status_placeholder = st.empty()
+    update_UI_server_status(status_placeholder)
+
+sync_status()
 
 if "messages" not in st.session_state:  # Initialize the chat messages history
     st.session_state.messages = [
