@@ -9,14 +9,8 @@ from dotenv import load_dotenv
 from .setup_db import get_db_string, setup_db
 from pathlib import Path
 
+
 load_dotenv()
-
-
-
-
-
-
-
 def clean_subtitle_text(text):
     # 1. Remove HTML tags (e.g., <i>, </i>, <font color="...">)
     cleaned_text = re.sub(r'<[^>]+>', '', text)
