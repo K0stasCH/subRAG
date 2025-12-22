@@ -21,7 +21,6 @@ def setup_db():
                     id serial PRIMARY KEY,
                     content text,
                     embedding vector(384),
-                    movie_name text
-                )
+                    movie_name text)
             ''')
             conn.commit()

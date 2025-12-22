@@ -1,20 +1,20 @@
-# Components for Retrieval (R)
-# from langchain_community.vectorstores import PGVector
-# Components for Generation (G)
 from typing import List
+import psycopg2, os
+from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_classic.chains import RetrievalQA
 
-from .data_prep import get_embeddings
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.documents import Document
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
 
 from .config import *
-import psycopg2
-from dotenv import load_dotenv
-import os
 from .dataSchemas import Query
-from .data_prep import initiate_data_prep
+from .data_prep import initiate_data_prep, get_embeddings
 from .setup_db import get_db_string, setup_db
-
 
 
 class SubRag():
@@ -27,9 +27,8 @@ class SubRag():
         self.embeddings = get_embeddings()
         self.db_connection = self._setup_db_connnection()
         self.movies = self._load_movies()
-        self.qa_chain = self.load_rag_chain()
+        self.rag_pipeline = self.load_rag_chain()
         self.number_of_retrieved_chunks = SEARCH_KWARGS['k']
-
 
     def _initialize_llm(self):
         print(f"Initializing Gemini LLM with model: {GEMINI_MODEL_NAME}")
@@ -68,64 +67,75 @@ class SubRag():
         
         return movies
 
+    def _retrieve_relevant_chunks(self, my_query: Query) -> List[dict]:
+        query_embedding = self.embeddings.embed_query(my_query.query)
+        with self.db_connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT content, embedding <-> %s::vector as distance
+                FROM movie_chunks
+                ORDER BY distance
+                LIMIT %s
+                """,
+                (query_embedding, self.number_of_retrieved_chunks),)
 
+            results = [
+                {"text": row[0], "distance": row[1]}
+                for row in cur.fetchall()]
 
-    def _retrieve_relevant_chunks(self, query: Query):
-        query_embedding = self.embeddings.embed_query(query)
-
-        conn = self._setup_db_connnection()
-        cur = conn.cursor()
-
-        # cur.execute(
-        #     """
-        #     SELECT chunk_text, metadata, embedding <-> %s::vector as distance
-        #     FROM document_chunks
-        #     ORDER BY distance
-        #     LIMIT %s
-        # """,
-        #     (query_embedding, k),
-        # )
-
-        # results = [
-        #     {"text": row[0], "metadata": row[1], "distance": row[2]}
-        #     for row in cur.fetchall()
-        # ]
-        results = None
-        cur.close()
-        conn.close()
         return results
 
-    def load_rag_chain(self) -> RetrievalQA:
-        """
-        Initializes the Gemini LLM and creates the LangChain RetrievalQA chain.
-        """
-        # 1. Initialize the Local LLM (The "G" component)
+    def load_rag_chain(self):
+        """Sets up the RAG logic using LCEL instead of a legacy chain."""
         llm = self._initialize_llm()
-        print("✅ Local LLM initialized.")
+        
+        # Define a custom prompt to control Gemini's behavior
+        template = """
+        You are a helpful assistant specialized in movie scripts.
+        Answer the question based ONLY on the following context:
+        {context}
 
-        # 2. Create the Retriever (The "R" component)
-        retriever = self.vector_store.as_retriever(search_kwargs=SEARCH_KWARGS)
-        print(f"Retriever set up to fetch top {SEARCH_KWARGS['k']} chunks.")
+        Question: {question}
+        """
+        prompt = ChatPromptTemplate.from_template(template)
 
-        # 3. Create the RetrievalQA Chain
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            chain_type="stuff", # 'stuff' means all retrieved docs are 'stuffed' into the prompt
-            retriever=retriever,
-            return_source_documents=True # Important for checking RAG performance
+        # Create the retriever bridge
+        retriever = PostgresRetriever(rag_instance=self)
+
+        # Create the LCEL Chain
+        # This pipes: Context/Question -> Prompt -> LLM -> String Output
+        rag_pipeline = (
+            {"context": retriever, "question": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
         )
-        print("✅ RetrievalQA Chain fully initialized.")
-        return qa_chain
+        print("✅ LCEL RAG Pipeline initialized.")
+        return rag_pipeline
 
     def rag_response(self, query: str):
         result = None # Initialize result
         try:
-            result = self.qa_chain.invoke({"query": query})
+            result = self.rag_pipeline.invoke(query)
+            result={"query":query, "result":result}
         except Exception as e:
             print(f"\n❌ ERROR during RAG execution: {e}\n")
             # Return an error object or dictionary instead of an undefined result
-            return {"query": query, "result": "An error occurred during generation.", "source_documents": []}
+            return {"query": query, "result": "An error occurred during generation."}
         return result
+    
+class PostgresRetriever(BaseRetriever):
+    rag_instance: any 
+
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun = None
+    ) -> List[Document]:
+        # Reuse your existing manual SQL retrieval method
+        from .dataSchemas import Query
+        results = self.rag_instance._retrieve_relevant_chunks(Query(query=query))
+        
+        # Convert your dict results into LangChain Document objects
+        return [Document(page_content=r["text"]) for r in results]
 
 if __name__ == '__main__':
     
