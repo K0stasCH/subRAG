@@ -6,6 +6,17 @@ from langchain_core.documents import Document
 from typing import List
 import re, os
 from .config import *
+import psycopg2
+from dotenv import load_dotenv
+from .setup_db import get_db_string, setup_db
+from pathlib import Path
+
+load_dotenv()
+
+
+
+
+
 
 
 def clean_subtitle_text(text):
@@ -36,7 +47,7 @@ def save_clean_subs(cleanSubtiltes:str, pathToSave:str)->None:
         print(f"An error occurred while writing the file: {e}")
     return
 
-def spli_text(documents: List[str], chunk_size: int = 1000, chunk_overlap: int = 200):
+def split_text(documents: List[str], chunk_size: int = 1000, chunk_overlap: int = 200):
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,  # A good size for dialogue
         chunk_overlap=chunk_overlap   # Ensures context flow
@@ -44,7 +55,7 @@ def spli_text(documents: List[str], chunk_size: int = 1000, chunk_overlap: int =
     split_chunks = text_splitter.split_documents(documents)
     return split_chunks
 
-def get_embeddings(        
+def get_embeddings(
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
         device: str = "cpu") -> HuggingFaceEmbeddings:
     """Initializes and returns the local HuggingFace embedding model."""
@@ -54,56 +65,52 @@ def get_embeddings(
         model_name=model_name,
         model_kwargs={'device': device} 
     )
+    print(f"✅ Successfully loaded local embedding model: {model_name}")
     return embeddings
 
-def create_and_save_or_load_embeddings(
-        chunks: List[Document] | None = None,
-        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
-        device: str = "cpu",
-        save_path: str = "index/movie_script_faiss_index"
-        ) -> FAISS:
-    """
-    Creates embeddings from document chunks, builds a FAISS index, 
-    saves it locally, and returns the in-memory vector store.
-    """
-    
-    embeddings = get_embeddings(model_name, device)
-    if os.path.exists(FAISS_INDEX_PATH) and os.path.isdir(FAISS_INDEX_PATH):
-        # 1. LOAD existing index
-        print(f"Loading existing FAISS index from: {FAISS_INDEX_PATH}")
-        # allow_dangerous_deserialization=True is required by LangChain for security when loading
-        vector_store = FAISS.load_local(
-            FAISS_INDEX_PATH, 
-            embeddings, 
-            allow_dangerous_deserialization=True
-        )
-        print("✅ Vector store loaded successfully.")
-    
-    elif chunks is not None:
-        # 2. CREATE new index
-        print("Index not found. Creating new FAISS index from document chunks...")
-        vector_store = FAISS.from_documents(
-            documents=chunks,
-            embedding=embeddings
-        )
-        vector_store.save_local(FAISS_INDEX_PATH)
-        print(f"✅ Vector store created and saved to: {FAISS_INDEX_PATH}")
-    
-    else:
-        raise FileNotFoundError(
-            "Vector store path not found, and no document chunks were provided to create it."
-        )
-        
-    return vector_store
+def store_in_db(split_chunks, embeddings_model, movie_name:str):
+    setup_db()
 
-def main():
+    with psycopg2.connect(get_db_string()) as conn:
+        with conn.cursor() as cur:
+            if movie_exists(movie_name):
+                print(f"ℹ️ The movie '{movie_name}' already exists in the database.")
+                return
+            else:
+                print(f"ℹ️ The movie '{movie_name}' don't exists in the database.")
+
+            # 3. Insert chunks
+            print(f"ℹ️ Storing {len(split_chunks)} chunks in Postgres...")
+            embeddings = get_embeddings(embeddings_model)
+            for doc in split_chunks:
+                # Generate the embedding vector
+                vector = embeddings.embed_query(doc.page_content)
+                
+                cur.execute(
+                    "INSERT INTO movie_chunks (content, embedding, movie_name) VALUES (%s, %s, %s)",
+                    (doc.page_content, vector, movie_name)
+                )
+            
+            conn.commit()
+        print("✅ All vectors stored successfully!")
+
+def movie_exists(movie_name):
+    # Use 'with' for both connection and cursor to ensure they close properly
+    with psycopg2.connect(dsn=get_db_string()) as conn:
+        with conn.cursor() as cur:
+            # 2. Add a comma after movie_name to make it a tuple
+            cur.execute(
+                "SELECT EXISTS(SELECT 1 FROM movie_chunks WHERE LOWER(movie_name) = LOWER(%s) LIMIT 1)", 
+                (movie_name,)
+            )
+
+            res = cur.fetchone()
+            return res[0] if res else False
+
+def initiate_data_prep():
     loader = SRTLoader(SRT_PATHS[0])
     docs = loader.load()
     for doc in docs:
         doc.page_content = clean_subtitle_text(doc.page_content)
-    split_chunks = spli_text(docs, CHUNK_SIZE, CHUNK_OVERLAP)
-    x = create_and_save_or_load_embeddings(split_chunks, HF_EMBEDDING_MODEL, DEVICE, FAISS_INDEX_PATH)
-    
-
-if __name__ == "__main__":
-    main()
+    split_chunks = split_text(docs, CHUNK_SIZE, CHUNK_OVERLAP)
+    store_in_db(split_chunks, HF_EMBEDDING_MODEL, Path(SRT_PATHS[0]).stem)
