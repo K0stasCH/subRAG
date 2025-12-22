@@ -108,9 +108,10 @@ def movie_exists(movie_name):
             return res[0] if res else False
 
 def initiate_data_prep():
-    loader = SRTLoader(SRT_PATHS[0])
-    docs = loader.load()
-    for doc in docs:
-        doc.page_content = clean_subtitle_text(doc.page_content)
-    split_chunks = split_text(docs, CHUNK_SIZE, CHUNK_OVERLAP)
-    store_in_db(split_chunks, HF_EMBEDDING_MODEL, Path(SRT_PATHS[0]).stem)
+    for movie_path in SRT_PATHS:
+        loader = SRTLoader(movie_path)
+        docs = loader.load()
+        for doc in docs:
+            doc.page_content = clean_subtitle_text(doc.page_content)
+        split_chunks = split_text(docs, CHUNK_SIZE, CHUNK_OVERLAP)
+        store_in_db(split_chunks, HF_EMBEDDING_MODEL, Path(SRT_PATHS[0]).stem)

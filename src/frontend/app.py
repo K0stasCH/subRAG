@@ -1,6 +1,5 @@
 import streamlit as st
 from utils import add_to_message_history, answer_question, update_UI_server_status
-import threading
 
 
 st.set_page_config(
@@ -15,7 +14,7 @@ st.set_page_config(
     },
 )
 
-st.title("SubRag")
+st.title("🎬 SubRag 🎬")
 st.header("A RAG system that replies based on the subtiltes of a movie")
 
 status_placeholder = st.empty()
