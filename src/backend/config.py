@@ -1,6 +1,6 @@
 # --- FILE PATHS ---
 # Paths are relative to the project root
-SRT_PATHS = ["subtitiles/raw/Terminator.3.srt"]
+SRT_PATHS = ["subtitles/raw/Terminator.3.srt"]
 CLEANED_TEXT_PATH = "data/processed/cleaned_dialogue.txt"
 FAISS_INDEX_PATH = "index/movie_script_faiss_index"
 
@@ -19,4 +19,4 @@ GEMINI_MODEL_NAME = "gemini-2.5-flash"
 SEARCH_KWARGS = {"k": 3} # Number of chunks to retrieve for each query
 TEMPERATURE = 0.1   # LLM creativity (0.0 is deterministic/factual)
 
-POSTGRES_COLLECTION_NAME = "my_vector_collection"
+# POSTGRES_COLLECTION_NAME = "my_vector_collection"

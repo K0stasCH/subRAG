@@ -1,6 +1,7 @@
 # Components for Retrieval (R)
 # from langchain_community.vectorstores import PGVector
 # Components for Generation (G)
+from typing import List
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_classic.chains import RetrievalQA
 
@@ -11,19 +12,21 @@ import psycopg2
 from dotenv import load_dotenv
 import os
 from .dataSchemas import Query
-from .data_prep import main
+from .data_prep import initiate_data_prep
+from .setup_db import get_db_string, setup_db
+
+
 
 class SubRag():
     def __init__(self):
-        print(",.................")
-        main()
-        print(",.................")
+
         load_dotenv()
         if not os.environ.get("GEMINI_API_KEY"):
             raise Exception("❌ Error not API key found")
         
         self.embeddings = get_embeddings()
         self.db_connection = self._setup_db_connnection()
+        self.movies = self._load_movies()
         self.qa_chain = self.load_rag_chain()
         self.number_of_retrieved_chunks = SEARCH_KWARGS['k']
 
@@ -41,25 +44,31 @@ class SubRag():
         Connects to PostgreSQL using pgvector.
         This does NOT load vectors into memory. It creates a connection object.
         """
-
-        COLLECTION_NAME = POSTGRES_COLLECTION_NAME
-        
         try:
-            print(f"Connecting to PGVector database: {COLLECTION_NAME}...")
-            
-            # This object acts as the interface to the DB. 
-            # It runs SQL queries for retrieval.
-            conn = psycopg2.connect(
-                dbname=os.environ.get("POSTGRES_DB"),
-                user=os.environ.get("POSTGRES_USER"),
-                password=os.environ.get("POSTGRES_PASSWORD"),
-                host=os.environ.get("db_host"),  #is published throught docker compose
-                port=os.environ.get("POSTGRES_PORT"),
-            )
-            print("✅ Database connection established.")
+            setup_db()
+            conn = psycopg2.connect(get_db_string())
             return conn
         except Exception as e:
             raise Exception(f"❌ Failed to connect to PGVector: {e}")
+    
+
+    def _load_movies(self) -> List[str]:
+        def fetch_query():
+            with self.db_connection.cursor() as cur:
+                cur.execute('SELECT DISTINCT movie_name FROM movie_chunks ORDER BY movie_name;')
+                return [row[0] for row in cur.fetchall()]
+
+        movies = fetch_query()
+
+        if not movies:
+            initiate_data_prep()
+            movies = fetch_query()
+        
+        print("ℹ️ Subtitles for movies loaded:", ", ".join(movies))
+        
+        return movies
+
+
 
     def _retrieve_relevant_chunks(self, query: Query):
         query_embedding = self.embeddings.embed_query(query)
