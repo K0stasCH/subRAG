@@ -27,6 +27,12 @@ The following screenshots demonstrate the application interface. Note that the r
 | :---: | :---: |
 | ![](screenshots/1.png) | ![](screenshots/2.png) |
 
+### Multi-Client Concurrency
+| Image 3 |
+| :---: |
+| ![](screenshots/3.png) |
+| *The interface demonstrating the system's ability to process requests from multiple concurrent clients simultaneously.* |
+
 ⚙️ Environment Configuration
 ----------------------------
 To run this project, you must create a .env file in the root directory. Use the following template and fill in your own values:

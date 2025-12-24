@@ -26,6 +26,7 @@ class SubRag():
         
         self.history_store = {} # Stores history in memory
         self.embeddings = get_embeddings()
+        self.llm = self._initialize_llm()
         self.db_connection = self._setup_db_connnection()
         self.movies = self._load_movies()
         self.rag_pipeline = self.load_rag_chain()
@@ -88,18 +89,26 @@ class SubRag():
 
     def load_rag_chain(self):
         """Sets up the RAG logic using LCEL instead of a legacy chain."""
-        llm = self._initialize_llm()
+        llm = self.llm
         
         # --- STEP 1: Define the Re-phrase Prompt ---
         rephrase_template = """
-        Given a chat history and the latest user question, 
-        formulate a standalone question. If the question is already standalone, just repeat it. 
-        Do NOT answer it.
+        You are an AI assistant tasked with reformulating user queries. 
+        Given a conversation history and a follow-up question, 
+        your goal is to rephrase the follow-up question into a standalone question 
+        that contains all necessary context.
+
+        Instructions:
+        1. Do not answer the question.
+        2. Maintain the original intent and meaning.
+        3. If the question is already standalone, return it exactly as is.
+        4. Remove all pronouns (e.g., "it", "they", "that") and replace them with the specific subjects from the history.
+        5. Output only the rephrased question.
         """
         rephrase_prompt = ChatPromptTemplate.from_messages([
             ("system", rephrase_template),
             MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{question}"),
+            ("human", "{initial_question}"),
         ])
         
         # This sub-chain creates the standalone query string
@@ -114,8 +123,7 @@ class SubRag():
         """
         qa_prompt = ChatPromptTemplate.from_messages([
             ("system", template),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{main_question}"),
+            ("human", "{rephrased_question}"),
         ])
 
         retriever = PostgresRetriever(rag_instance=self)
@@ -125,14 +133,14 @@ class SubRag():
             # We re-phrase the question first using history
             standalone_question = rephrase_chain.invoke({
                 "chat_history": input_dict["chat_history"],
-                "question": input_dict["question"]
+                "initial_question": input_dict["init_question"]
             })
-
+            print(f"ℹ️: Re-phrased question: {standalone_question}")
             # Then retrieve using the standalone version
             return {
                 "final_context": retriever.invoke(standalone_question),
-                "main_question": standalone_question,
-                "chat_history": input_dict["chat_history"]
+                "rephrased_question": standalone_question,
+                # "chat_history": input_dict["chat_history"]
             }
 
         self.rag_pipeline = (
@@ -147,14 +155,14 @@ class SubRag():
         with_history = RunnableWithMessageHistory(
             self.rag_pipeline,
             self._get_session_history,
-            input_messages_key="question",
+            input_messages_key="init_question",
             history_messages_key="chat_history",
         )
         
         try:
             # We pass a config object with the session_id
             answer = with_history.invoke(
-                {"question": query},
+                {"init_question": query},
                 config={"configurable": {"session_id": session_id}}
             )
         except Exception as e:
