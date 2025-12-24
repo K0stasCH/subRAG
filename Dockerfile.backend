@@ -11,4 +11,3 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # Copy only the necessary backend source code and config files
 COPY src/backend /app/src/backend
-COPY subtitles /app/subtitles
