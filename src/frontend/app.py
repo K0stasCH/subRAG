@@ -1,5 +1,6 @@
 import streamlit as st
-from utils import add_to_message_history, answer_question, update_UI_server_status
+import uuid
+from utils import add_to_message_history, answer_question, update_UI_server_status, send_delete_history
 
 
 st.set_page_config(
@@ -24,6 +25,18 @@ def sync_status():
 
 sync_status()
 
+if st.button("Clear Conversation"):
+    # Delete the ID so a new one is generated on the next rerun
+    send_delete_history(st.session_state.session_id)
+    del st.session_state.session_id
+    del st.session_state.messages
+    st.rerun()
+
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+    st.toast(f"Connected to Session: {st.session_state.session_id[:8]}...", icon="✅")
+
+
 if "messages" not in st.session_state:  # Initialize the chat messages history
     st.session_state.messages = [
         {"role": "assistant", "content": "Hey, you can ask me anything!"}
@@ -41,7 +54,7 @@ if prompt:= st.chat_input("Ask your question here..."):
     if st.session_state.messages[-1]["role"] == "user":
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                response_data = answer_question(prompt)
+                response_data = answer_question(prompt, st.session_state.session_id)
                 answer = response_data.get("answer", "❌ Error: No answer key found in API response.")
                 st.markdown(str(answer))
                 add_to_message_history("assistant", str(answer))

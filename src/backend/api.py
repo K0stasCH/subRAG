@@ -74,6 +74,10 @@ async def get_health_status():
     status = "online" if hasattr(app.state, 'rag_instance') and app.state.rag_instance else "degraded (RAG not initialized)"
     return Health_Status(message="RAG API is running!", status=status)
 
+@app.delete("/delete_History/{uuid}")
+async def delete_History(uuid: str):
+    app.state.rag_instance.delete_history_with(uuid)
+
 @app.post("/api/query")
 async def process_query(query_data: Query):
     """
@@ -89,12 +93,13 @@ async def process_query(query_data: Query):
         )
         
     user_query = query_data.query # Access the query string from the Pydantic model
+    user_session_id = query_data.session_id
     
     try:
         # Get the response from the RAG system
         # Ensure rag_response is either synchronous or properly awaited if it's async
         # We assume it is synchronous based on your original code: rag_instance.rag_response(user_query)
-        result = rag_instance.rag_response(user_query)
+        result = rag_instance.rag_response(user_query, user_session_id)
 
         # Structure the response for the frontend
         response_data = {

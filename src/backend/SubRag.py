@@ -10,6 +10,10 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from langchain_core.prompts import MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
 
 from .config import *
 from .dataSchemas import Query, Response
@@ -24,6 +28,7 @@ class SubRag():
         if not os.environ.get("GEMINI_API_KEY"):
             raise Exception("❌ Error not API key found")
         
+        self.history_store = {} # Stores history in memory
         self.embeddings = get_embeddings()
         self.db_connection = self._setup_db_connnection()
         self.movies = self._load_movies()
@@ -67,8 +72,8 @@ class SubRag():
         
         return movies
 
-    def _retrieve_relevant_chunks(self, my_query: Query) -> List[dict]:
-        query_embedding = self.embeddings.embed_query(my_query.query)
+    def _retrieve_relevant_chunks(self, my_query: str) -> List[dict]:
+        query_embedding = self.embeddings.embed_query(my_query)
         with self.db_connection.cursor() as cur:
             cur.execute(
                 """
@@ -113,7 +118,7 @@ class SubRag():
         print("✅ LCEL RAG Pipeline initialized.")
         return rag_pipeline
     
-    def rag_response(self, query: str) -> Response:
+    def rag_response(self, query: str, session_id: str) -> Response:
         """
         Executes the RAG pipeline and returns a structured Response.
         """
@@ -124,6 +129,9 @@ class SubRag():
         finally:
             return Response(query=query, answer=answer)
     
+    def delete_history_with(self, session_id: str):
+        print(f"delete {session_id}")
+    
 class PostgresRetriever(BaseRetriever):
     rag_instance: any 
 
@@ -132,7 +140,7 @@ class PostgresRetriever(BaseRetriever):
     ) -> List[Document]:
         # Reuse your existing manual SQL retrieval method
         from .dataSchemas import Query
-        results = self.rag_instance._retrieve_relevant_chunks(Query(query=query))
+        results = self.rag_instance._retrieve_relevant_chunks(query)
         
         # Convert your dict results into LangChain Document objects
         return [Document(page_content=r["text"]) for r in results]
