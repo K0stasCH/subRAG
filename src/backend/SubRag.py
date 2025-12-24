@@ -140,7 +140,6 @@ class SubRag():
             return {
                 "final_context": retriever.invoke(standalone_question),
                 "rephrased_question": standalone_question,
-                # "chat_history": input_dict["chat_history"]
             }
 
         self.rag_pipeline = (
