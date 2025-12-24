@@ -76,7 +76,7 @@ async def get_health_status():
 
 @app.delete("/delete_History/{uuid}")
 async def delete_History(uuid: str):
-    app.state.rag_instance.delete_history_with(uuid)
+    app.state.rag_instance._delete_history_with(uuid)
 
 @app.post("/api/query")
 async def process_query(query_data: Query):

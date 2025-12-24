@@ -3,20 +3,16 @@ import psycopg2, os
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
-
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
-from langchain_core.prompts import MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 
 from .config import *
-from .dataSchemas import Query, Response
+from .dataSchemas import Response
 from .data_prep import initiate_data_prep, get_embeddings
 from .setup_db import get_db_string, setup_db
 
@@ -94,43 +90,85 @@ class SubRag():
         """Sets up the RAG logic using LCEL instead of a legacy chain."""
         llm = self._initialize_llm()
         
-        # Define a custom prompt to control Gemini's behavior
+        # --- STEP 1: Define the Re-phrase Prompt ---
+        rephrase_template = """
+        Given a chat history and the latest user question, 
+        formulate a standalone question. If the question is already standalone, just repeat it. 
+        Do NOT answer it.
+        """
+        rephrase_prompt = ChatPromptTemplate.from_messages([
+            ("system", rephrase_template),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{question}"),
+        ])
+        
+        # This sub-chain creates the standalone query string
+        rephrase_chain = rephrase_prompt | llm | StrOutputParser()
+        
+        # --- STEP 2: Define the Final RAG Prompt ---
         template = """
         You are a helpful assistant specialized in movie scripts.
+        If the answer isn't in the context, say you don't know based on the script.
         Answer the question based ONLY on the following context:
-        {context}
-
-        Question: {question}
+        {final_context}
         """
-        prompt = ChatPromptTemplate.from_template(template)
+        qa_prompt = ChatPromptTemplate.from_messages([
+            ("system", template),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{main_question}"),
+        ])
 
-        # Create the retriever bridge
         retriever = PostgresRetriever(rag_instance=self)
 
-        # Create the LCEL Chain
-        # This pipes: Context/Question -> Prompt -> LLM -> String Output
-        rag_pipeline = (
-            {"context": retriever, "question": RunnablePassthrough()}
-            | prompt
-            | llm
+        # --- STEP 3: The Combined Pipeline ---
+        def get_context_and_question(input_dict):
+            # We re-phrase the question first using history
+            standalone_question = rephrase_chain.invoke({
+                "chat_history": input_dict["chat_history"],
+                "question": input_dict["question"]
+            })
+
+            # Then retrieve using the standalone version
+            return {
+                "final_context": retriever.invoke(standalone_question),
+                "main_question": standalone_question,
+                "chat_history": input_dict["chat_history"]
+            }
+
+        self.rag_pipeline = (
+            get_context_and_question 
+            | qa_prompt 
+            | llm 
             | StrOutputParser()
         )
-        print("✅ LCEL RAG Pipeline initialized.")
-        return rag_pipeline
+        return self.rag_pipeline
     
     def rag_response(self, query: str, session_id: str) -> Response:
-        """
-        Executes the RAG pipeline and returns a structured Response.
-        """
+        with_history = RunnableWithMessageHistory(
+            self.rag_pipeline,
+            self._get_session_history,
+            input_messages_key="question",
+            history_messages_key="chat_history",
+        )
+        
         try:
-            answer = self.rag_pipeline.invoke(query)
+            # We pass a config object with the session_id
+            answer = with_history.invoke(
+                {"question": query},
+                config={"configurable": {"session_id": session_id}}
+            )
         except Exception as e:
             answer = f"\n❌ ERROR during RAG execution: {e}\n"
-        finally:
-            return Response(query=query, answer=answer)
+        
+        return Response(query=query, answer=answer)
     
-    def delete_history_with(self, session_id: str):
-        print(f"delete {session_id}")
+    def _delete_history_with(self, session_id: str):
+        self.history_store.pop(session_id, None)
+    
+    def _get_session_history(self, session_id: str):
+        if session_id not in self.history_store:
+            self.history_store[session_id] = ChatMessageHistory()
+        return self.history_store[session_id]
     
 class PostgresRetriever(BaseRetriever):
     rag_instance: any 
@@ -139,7 +177,6 @@ class PostgresRetriever(BaseRetriever):
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun = None
     ) -> List[Document]:
         # Reuse your existing manual SQL retrieval method
-        from .dataSchemas import Query
         results = self.rag_instance._retrieve_relevant_chunks(query)
         
         # Convert your dict results into LangChain Document objects

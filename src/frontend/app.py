@@ -15,10 +15,16 @@ st.set_page_config(
     },
 )
 
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+with st.sidebar:
+    st.info(f"Connected to Session: {st.session_state.session_id[:8]}...", icon="✅")
+
 st.title("🎬 SubRag 🎬")
 st.header("A RAG system that replies based on the subtiltes of a movie")
 
-@st.fragment(run_every=10)
+# @st.fragment(run_every=10)
 def sync_status():
     status_placeholder = st.empty()
     update_UI_server_status(status_placeholder)
@@ -31,11 +37,6 @@ if st.button("Clear Conversation"):
     del st.session_state.session_id
     del st.session_state.messages
     st.rerun()
-
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
-    st.toast(f"Connected to Session: {st.session_state.session_id[:8]}...", icon="✅")
-
 
 if "messages" not in st.session_state:  # Initialize the chat messages history
     st.session_state.messages = [

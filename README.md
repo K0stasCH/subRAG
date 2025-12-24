@@ -9,13 +9,16 @@ This project is a Retrieval-Augmented Generation (RAG) system that allows users 
 The application is composed of four main Dockerized services:
 
 1.  **Frontend**: A Streamlit web interface for users to chat with movie scripts.
-    
 2.  **Backend**: A FastAPI service that manages the RAG pipeline using LangChain, embedding generation, and LLM communication.
-    
 3.  **PostgreSQL (Vector DB)**: A database with the pgvector extension for storing subtitle chunks and high-dimensional embeddings.
-    
 4.  **pgAdmin**: A management tool to visualize and manage the PostgreSQL database.
     
+👥 Session Management & Multi-Tenancy
+----------------------------
+The system is designed to support multiple concurrent users through History Isolation:
+* **Unique Session IDs**: Each frontend client is assigned a unique UUID upon initialization.
+* **Stateful Backend**: The RAG instance uses this ID to map incoming requests to a specific ChatMessageHistory instance stored in a in-memory dictionary.
+* **Contextual Privacy**: This ensures that the RAG pipeline only retrieves previous messages relevant to the current user, preventing "context leaking" between different sessions.
 
 🖼️ Screenshots
 ----------------------------
@@ -86,7 +89,7 @@ This command will:
 2.  **Embedding**: Text chunks are processed using LangChain's document loaders and sent to the Hugging Face embedding model.
 3.  **Indexing**: Vectors are stored in the database using pgvector.
 4.  **Querying**: When a user asks a question, LangChain performs a similarity search in the DB to retrieve relevant context.
-5.  **Response**: The most relevant subtitle lines are sent as context to the Gemini LLM to generate the final answer.
+5.  **Contextual Retrieval**: The system retrieves relevant subtitle chunks and the recent chat history to maintain conversation flow.
 
 🔮 Suggestions for Future Improvements
 ---------------------
