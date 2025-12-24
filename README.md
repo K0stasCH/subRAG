@@ -31,7 +31,7 @@ The following screenshots demonstrate the application interface. Note that the r
 | Image 3 |
 | :---: |
 | ![](screenshots/3.png) |
-| *The interface demonstrating the system's ability to process requests from multiple concurrent clients simultaneously.* |
+| *An example of demonstrating the system's ability to process requests from multiple concurrent clients simultaneously.* |
 
 ⚙️ Environment Configuration
 ----------------------------
